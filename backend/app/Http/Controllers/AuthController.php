@@ -13,9 +13,9 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $data = $request->validate([
-            "name" => "required|string",
-            "email" => "required|string|email|unique:users",
-            "password" => "required|min:6",
+            "name" => "required|string|max:255",
+            "email" => "required|string|email|max:255|unique:users",
+            "password" => "required|string|min:6",
             "role" => "nullable|string|in:admin,user,moderator" 
         ]);
 
@@ -24,7 +24,7 @@ class AuthController extends Controller
             $user = User::create([
                 "name" => $data["name"],
                 "email" => $data["email"],
-                "password" => $data["password"],
+                "password" => Hash::make($data["password"]),
                 "role" => $data["role"] ?? 'user' 
             ]);
 
@@ -51,8 +51,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $data = $request->validate([
-            "email" => "required|email|exists:users,email",
-            "password" => "required|min:6",
+            "email" => "required|string|email|max:255",
+            "password" => "required|string|min:6",
         ]);
 
         $user = User::where("email", $data["email"])->first();
@@ -60,8 +60,8 @@ class AuthController extends Controller
         if (!$user) {
             return response()->json([
                 "success" => false,
-                "message" => "User not found."
-            ], 404);
+                "message" => "The provided credentials are incorrect."
+            ], 401);
         }
 
         if (!Hash::check($data["password"], $user->password)) {

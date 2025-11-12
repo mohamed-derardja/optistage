@@ -27,41 +27,45 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'currentUser']);
     Route::get('/getHistory', [ResultController::class, 'getHistory']);
-    Route::post('chargilypay/redirect', [ChargilyPayController::class, "redirect"])->name("chargilypay.redirect");
-    Route::get('chargilypay/back', [ChargilyPayController::class, "back"])->name("chargilypay.back");
-    Route::post('chargilypay/webhook', [ChargilyPayController::class, "webhook"])->name("chargilypay.webhook_endpoint");
-    
-    
-    Route::post('/getDataFromAgent', [ResultController::class, 'processPdf'])->middleware('simple.rate.limit');;
+    Route::post('chargilypay/redirect', [ChargilyPayController::class, 'redirect'])->name('chargilypay.redirect');
+    Route::get('chargilypay/back', [ChargilyPayController::class, 'back'])->name('chargilypay.back');
+    Route::post('/getDataFromAgent', [ResultController::class, 'processPdf'])->middleware('simple.rate.limit');
+    Route::resource('/users', UserController::class);
+    Route::get('/stats', [ResultController::class, 'getStat']);
 });
 
 // Optional: Admin-only routes
 Route::middleware(['auth:sanctum', 'role:admin'])->group(function () {
-
+    // Add admin-only routes here
 });
 
-Route::middleware('auth:sanctum')->group(function () {
-    Route::post('chargilypay/redirect', [ChargilyPayController::class, 'redirect'])->name('chargilypay.redirect');
-    Route::get('chargilypay/back', [ChargilyPayController::class, 'back'])->name('chargilypay.back');
-    Route::resource('/users', UserController::class);
-    Route::get('/stats', [ResultController::class, 'getStat']);
-
-
-});
+// Webhook routes (public, no authentication required)
 Route::post('chargilypay/webhook', [ChargilyPayController::class, 'webhook'])->name('chargilypay.webhook');
+Route::options('chargilypay/webhook', [ChargilyPayController::class, 'handleOptions']);
 
+// Test routes
 Route::post('chargily/webhook/test', [ChargilyPayController::class, 'testWebhook']);
+Route::post('chargilypay/simulate-webhook', [ChargilyPayController::class, 'simulateWebhook']);
 
+// Dashboard route
 Route::middleware(['auth:sanctum', 'check.access'])->get('/dashboard', function () {
     return "Welcome to your paid dashboard!";
 });
 
+// Test routes
 Route::get('/test', function () {
-    return "Welcome to test";
+    return response()->json([
+        'success' => true,
+        'message' => 'GET request works!',
+        'method' => 'GET'
+    ]);
 });
 
-
-
-Route::options('chargilypay/webhook', [ChargilyPayController::class, 'handleOptions']);
-
-Route::post('chargilypay/simulate-webhook', [ChargilyPayController::class, 'simulateWebhook']);
+Route::post('/test', function (Request $request) {
+    return response()->json([
+        'success' => true,
+        'message' => 'POST request works!',
+        'method' => 'POST',
+        'received_data' => $request->all()
+    ]);
+});

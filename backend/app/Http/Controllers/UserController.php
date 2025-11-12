@@ -30,7 +30,7 @@ class UserController extends Controller
             ? strtolower($request_query['sort_direction'] ?? 'asc')
             : 'asc';
 
-$data = User::query()->withSum('payment', 'amount');
+$data = User::query()->withSum('payment', 'amount')->with('payment');
 
         if (!empty($request_query['role'])) {
             $roleName = $request_query['role'];
@@ -94,7 +94,18 @@ if (isset($request_query["is_active"])) {
      */
     public function store(Request $request)
     {
-        //
+        try {
+            return response()->json([
+                'success' => false,
+                'message' => 'Method not implemented yet'
+            ], 501);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to create user',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -102,7 +113,26 @@ if (isset($request_query["is_active"])) {
      */
     public function show(string $id)
     {
-        //
+        try {
+            $user = User::with('payment', 'results')->findOrFail($id);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $user,
+                'message' => 'User retrieved successfully'
+            ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to retrieve user',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -110,7 +140,41 @@ if (isset($request_query["is_active"])) {
      */
     public function update(Request $request, string $id)
     {
-        
+        try {
+            $user = User::findOrFail($id);
+            
+            $data = $request->validate([
+                'name' => 'sometimes|string|max:255',
+                'email' => 'sometimes|string|email|max:255|unique:users,email,' . $id,
+                'role' => 'sometimes|string|in:admin,user,moderator',
+                'is_active' => 'sometimes|boolean'
+            ]);
+            
+            $user->update($data);
+            
+            return response()->json([
+                'success' => true,
+                'data' => $user,
+                'message' => 'User updated successfully'
+            ], 200);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to update user',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 
     /**
@@ -118,6 +182,25 @@ if (isset($request_query["is_active"])) {
      */
     public function destroy(string $id)
     {
-        //
+        try {
+            $user = User::findOrFail($id);
+            $user->delete();
+            
+            return response()->json([
+                'success' => true,
+                'message' => 'User deleted successfully'
+            ], 200);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not found'
+            ], 404);
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to delete user',
+                'error' => $e->getMessage()
+            ], 500);
+        }
     }
 }

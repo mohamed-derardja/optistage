@@ -14,10 +14,18 @@ class ResultController extends Controller
 {
     public function processPdf(Request $request)
     {
-        // 1. Validate the PDF file
-        $request->validate([
-            'file' => 'required|file|mimes:pdf|max:5120', // 5MB max
-        ]);
+        try {
+            // 1. Validate the PDF file
+            $request->validate([
+                'file' => 'required|file|mimes:pdf|max:5120', // 5MB max
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $e->errors()
+            ], 422);
+        }
 
         try {
             // 2. Get the PDF file
@@ -78,60 +86,90 @@ class ResultController extends Controller
 
 public function getHistory()
 {
-    $user = Auth::user();
-    
-    $history = Result::where('user_id', $user->id)
-        ->orderBy('created_at', 'desc')
-        ->paginate(10);
+    try {
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'User not authenticated'
+            ], 401);
+        }
+        
+        $history = Result::where('user_id', $user->id)
+            ->orderBy('created_at', 'desc')
+            ->paginate(10);
 
-    return response()->json([
-        'success' => true,
-        'data' => $history,
-        'message' => 'History retrieved successfully'
-    ]);
+        return response()->json([
+            'success' => true,
+            'data' => $history->items(),
+            'pagination' => [
+                'total' => $history->total(),
+                'per_page' => $history->perPage(),
+                'current_page' => $history->currentPage(),
+                'last_page' => $history->lastPage(),
+            ],
+            'message' => 'History retrieved successfully'
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to retrieve history',
+            'error' => $e->getMessage()
+        ], 500);
+    }
 }
 
 // In your Laravel Controller (e.g., StatsController.php)
 
 public function getStat()
 {
-    // Total number of users
-    $numberOfUsers = User::count();
-    
-    // Total payment amount (sum of all successful payments)
-    $paymentTotal = ChargilyPayment::where('status', 'paid')->sum('amount');
-    
-    // Total number of tests (assuming each test has 3 results)
-    $numberOfTests = ceil(Result::count() / 3);
-    
-    // Total number of result links
-    $numberOfLinks = Result::count();
-    
-    // Monthly payment data for the chart
-    $monthlyPayments = ChargilyPayment::where('status', 'paid')
-        ->selectRaw('SUM(amount) as total, MONTH(created_at) as month')
-        ->groupBy('month')
-        ->orderBy('month')
-        ->get();
-    
-    // Format monthly data for chart
-    $paymentChartData = [];
-    $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    
-    foreach ($months as $index => $month) {
-        $payment = $monthlyPayments->firstWhere('month', $index + 1);
-        $paymentChartData[$month] = $payment ? $payment->total : 0;
+    try {
+        // Total number of users
+        $numberOfUsers = User::count();
+        
+        // Total payment amount (sum of all successful payments)
+        $paymentTotal = ChargilyPayment::where('status', 'paid')->sum('amount') ?? 0;
+        
+        // Total number of tests (assuming each test has 3 results)
+        $numberOfTests = ceil(Result::count() / 3);
+        
+        // Total number of result links
+        $numberOfLinks = Result::count();
+        
+        // Monthly payment data for the chart (SQLite compatible)
+        $monthlyPayments = ChargilyPayment::where('status', 'paid')
+            ->selectRaw('SUM(CAST(amount AS REAL)) as total, strftime("%m", created_at) as month')
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get();
+        
+        // Format monthly data for chart
+        $paymentChartData = [];
+        $months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        
+        foreach ($months as $index => $month) {
+            $monthNum = str_pad($index + 1, 2, '0', STR_PAD_LEFT);
+            $payment = $monthlyPayments->firstWhere('month', $monthNum);
+            $paymentChartData[$month] = $payment ? (float)$payment->total : 0;
+        }
+        
+        return response()->json([
+            'success' => true,
+            'data' => [
+                'totalUsers' => $numberOfUsers,
+                'totalPayments' => (float)$paymentTotal,
+                'totalTests' => $numberOfTests,
+                'totalLinks' => $numberOfLinks,
+                'paymentChartData' => $paymentChartData
+            ]
+        ]);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Failed to retrieve statistics',
+            'error' => $e->getMessage()
+        ], 500);
     }
-    
-    return response()->json([
-        'success' => true,
-        'data' => [
-            'totalUsers' => $numberOfUsers,
-            'totalPayments' => $paymentTotal,
-            'totalTests' => $numberOfTests,
-            'totalLinks' => $numberOfLinks,
-            'paymentChartData' => $paymentChartData
-        ]
-    ]);
 }
 }
