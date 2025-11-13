@@ -14,11 +14,15 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 LAMA_API_KEY = os.getenv("LAMA_API_KEY")  
 
 
-os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY   
-os.environ["GEMINI_API_KEY"] = GOOGLE_API_KEY  
+# Only set environment variables if they are not None
+if GOOGLE_API_KEY:
+    os.environ["GOOGLE_API_KEY"] = GOOGLE_API_KEY   
+    os.environ["GEMINI_API_KEY"] = GOOGLE_API_KEY
+else:
+    print("Warning: GOOGLE_API_KEY not found in environment variables. Please check your .env file.")  
 
 # Model Configuration
-GEMINI_MODEL = "gemini-pro"  
+GEMINI_MODEL = "gemini-2.5-flash"  # Using gemini-2.5-flash which is available and stable  
 
 # Agent Configuration
 MAX_ITERATIONS = 3

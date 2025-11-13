@@ -16,13 +16,15 @@ class DocumentAnalysisAgent:
     
     def get_agent(self):
         """Create and return the document analysis agent."""
-        from langchain_google_genai import ChatGoogleGenerativeAI
+        from crewai.llm import LLM
 
-        gemini_llm = ChatGoogleGenerativeAI(
-            model=config.GEMINI_MODEL,
-            google_api_key=config.GOOGLE_API_KEY,
+        if not config.GOOGLE_API_KEY:
+            raise ValueError("GOOGLE_API_KEY is not set. Please check your .env file.")
+
+        gemini_llm = LLM(
+            model="gemini/gemini-2.5-flash",
+            api_key=config.GOOGLE_API_KEY,
             temperature=config.TEMPERATURE,
-            verbose=config.VERBOSE
         )
 
         return Agent(

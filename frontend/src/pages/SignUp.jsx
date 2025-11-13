@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import Background from "../assets/background.jpg";
 import { useAuth } from "../routes/useAuth";
-import { AuthService } from "../services/authService";
 
 const SignUp = () => {
     const [name, setName] = useState("");
@@ -10,6 +9,7 @@ const SignUp = () => {
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [showPassword, setShowPassword] = useState(false);
+    const [passwordMismatch, setPasswordMismatch] = useState(false);
     const { signup, error, message, loading, user } = useAuth();
     const navigate = useNavigate();
 
@@ -22,10 +22,14 @@ const SignUp = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setPasswordMismatch(false);
+        
         if (password !== confirmPassword) {
+            setPasswordMismatch(true);
             return;
         }
-        await AuthService.register(name, email, password);
+        
+        await signup(name, email, password);
     };
 
     return (
@@ -39,12 +43,12 @@ const SignUp = () => {
                     Create Your Account
                 </h1>
 
-                {error && (
+                {(error || passwordMismatch) && (
                     <div
                         className="mb-4 p-2 bg-red-500/20 text-red-300 rounded-lg text-sm"
                         role="alert"
                     >
-                        {message || "Signup failed"}
+                        {passwordMismatch ? "Passwords do not match" : (message || "Signup failed")}
                     </div>
                 )}
 

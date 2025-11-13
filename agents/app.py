@@ -73,7 +73,14 @@ def process_pdf():
                 return jsonify({"success": True, "result": result})
                 
         except Exception as e:
-            return jsonify({"error": f"Processing error: {str(e)}"}), 500
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Error processing PDF: {str(e)}")
+            print(f"Traceback: {error_details}")
+            return jsonify({
+                "error": f"Processing error: {str(e)}",
+                "details": error_details
+            }), 500
         finally:
             # Clean up the temporary file
             if os.path.exists(temp_path):

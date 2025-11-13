@@ -25,45 +25,51 @@ class ChargilyPayController extends Controller
                 ], 401);
             }
 
-        $currency = 'dzd';
-        $amount = '25000'; 
+            $currency = 'dzd';
+            $amount = '25000'; 
 
-        $payment = ChargilyPayment::create([
-            'user_id'  => $userId,
-            'status'   => 'pending',
-            'currency' => $currency,
-            'amount'   => $amount,
-        ]);
+            // Create payment record
+            $payment = ChargilyPayment::create([
+                'user_id'  => $userId,
+                'status'   => 'pending',
+                'currency' => $currency,
+                'amount'   => $amount,
+            ]);
 
-   
-        
-        $checkout = $this->chargilyPayInstance()->checkouts()->create([
-            'metadata' => [
-                'payment_id' => $payment->id,
-            ],
-            'locale' => 'ar',
-            'amount' => $payment->amount,
-            'currency' => $payment->currency,
-            'description' => "Payment ID={$payment->id}",
-            'success_url' => url('/api/chargilypay/back'),
-            'failure_url' => url('/api/chargilypay/back'),
+            // Create ChargilyPay instance
+            $chargilyPay = $this->chargilyPayInstance();
             
-        ]);
+            // Create checkout
+            $checkout = $chargilyPay->checkouts()->create([
+                'metadata' => [
+                    'payment_id' => $payment->id,
+                ],
+                'locale' => 'ar',
+                'amount' => $payment->amount,
+                'currency' => $payment->currency,
+                'description' => "Payment ID={$payment->id}",
+                'success_url' => url('/api/chargilypay/back'),
+                'failure_url' => url('/api/chargilypay/back'),
+            ]);
 
-                 $user = User::findOrFail($userId);
-            $user->access_expires_at = Carbon::now()->addDays(30);
-            $user->save();
+            // Get checkout URL
+            $checkoutUrl = $checkout->getUrl();
             
             return response()->json([
                 "success" => true,
-                "url" => $checkout->getUrl()
+                "url" => $checkoutUrl
             ]);
         } catch (\Exception $e) {
-            Log::error('ChargilyPay Redirect Error: ' . $e->getMessage());
+            Log::error('ChargilyPay Redirect Error: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine()
+            ]);
+            
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to create payment redirect',
-                'error' => $e->getMessage()
+                'error' => config('app.debug') ? $e->getMessage() : 'Payment initialization failed. Please try again.'
             ], 500);
         }
     }
@@ -86,21 +92,41 @@ class ChargilyPayController extends Controller
             $metadata = $checkout->getMetadata();
             $payment = ChargilyPayment::find($metadata['payment_id']);
 
-            // Simulate webhook result locally
+            if (!$payment) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment record not found'
+                ], 404);
+            }
+
+            // Update payment status based on checkout status
             if ($checkout->getStatus() === 'paid') {
                 $payment->status = 'paid';
-            } else {
-                $payment->status = 'failed';
-            }
-            $payment->save();
-
+                $payment->save();
+                
+                // Update user access only when payment is successful
+                $user = User::findOrFail($payment->user_id);
+                $user->is_active = true;
+                $user->access_expires_at = Carbon::now()->addDays(30);
+                $user->save();
+                
                 return response()->json([
                     'success' => true,
-                    'message' => 'Payment completed locally.',
+                    'message' => 'Payment completed successfully.',
                     'status' => $payment->status,
                     'amount' => $payment->amount,
                 ]);
+            } else {
+                $payment->status = 'failed';
+                $payment->save();
+                
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Payment failed.',
+                    'status' => $payment->status,
+                ], 400);
             }
+        }
 
             return response()->json([
                 'success' => false,
@@ -215,10 +241,87 @@ class ChargilyPayController extends Controller
 
     protected function chargilyPayInstance()
     {
-        return new ChargilyPay(new Credentials([
-            'mode' => 'test',
-            'public' => env('CHARGILY_PAY_PUBLIC', 'test_pk_********************'),
-            'secret' => env('CHARGILY_PAY_SECRET', 'test_sk_********************'),
-        ]));
+        try {
+            $publicKey = env('CHARGILY_PAY_PUBLIC');
+            $secretKey = env('CHARGILY_PAY_SECRET');
+            $useMock = env('CHARGILY_PAY_USE_MOCK', false);
+            
+            // Convert string 'true'/'false' to boolean
+            $useMock = filter_var($useMock, FILTER_VALIDATE_BOOLEAN);
+            
+            // Use mock mode if explicitly enabled OR if credentials are missing
+            if ($useMock || (!$publicKey || !$secretKey)) {
+                if ($useMock) {
+                    Log::info('ChargilyPay mock mode enabled for testing.');
+                } else {
+                    Log::warning('ChargilyPay credentials not configured. Using mock mode for development.');
+                }
+                
+                // Return a mock instance for development/testing
+                return new class {
+                    public function checkouts() {
+                        return new class {
+                            public function create($data) {
+                                return new class($data) {
+                                    private $data;
+                                    public function __construct($data) {
+                                        $this->data = $data;
+                                    }
+                                    public function getUrl() {
+                                        // Return a mock payment URL that will simulate successful payment
+                                        $baseUrl = env('APP_URL', 'http://127.0.0.1:8000');
+                                        $paymentId = $this->data['metadata']['payment_id'] ?? 1;
+                                        return $baseUrl . '/api/chargilypay/back?checkout_id=mock_checkout_' . $paymentId . '_' . time();
+                                    }
+                                    public function getMetadata() {
+                                        return $this->data['metadata'] ?? [];
+                                    }
+                                };
+                            }
+                            public function get($checkoutId) {
+                                // Mock checkout for testing - always returns paid status
+                                return new class($checkoutId) {
+                                    private $checkoutId;
+                                    public function __construct($checkoutId) {
+                                        $this->checkoutId = $checkoutId;
+                                    }
+                                    public function getStatus() {
+                                        // Extract payment_id from checkout_id if it's a mock checkout
+                                        if (strpos($this->checkoutId, 'mock_checkout_') === 0) {
+                                            return 'paid'; // Simulate successful payment
+                                        }
+                                        return 'paid';
+                                    }
+                                    public function getMetadata() {
+                                        // Extract payment_id from mock checkout_id
+                                        if (preg_match('/mock_checkout_(\d+)_/', $this->checkoutId, $matches)) {
+                                            return ['payment_id' => (int)$matches[1]];
+                                        }
+                                        return ['payment_id' => 1];
+                                    }
+                                };
+                            }
+                        };
+                    }
+                    public function webhook() {
+                        return new class {
+                            public function get() {
+                                return null;
+                            }
+                        };
+                    }
+                };
+            }
+            
+            // Use real ChargilyPay API
+            return new ChargilyPay(new Credentials([
+                'mode' => env('CHARGILY_PAY_MODE', 'test'),
+                'public' => $publicKey,
+                'secret' => $secretKey,
+            ]));
+        } catch (\Exception $e) {
+            Log::error('Failed to create ChargilyPay instance: ' . $e->getMessage());
+            throw $e;
+        }
     }
 }

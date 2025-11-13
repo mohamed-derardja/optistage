@@ -13,6 +13,17 @@ class WebScraperAgent:
         
     def get_agent(self):
         """Create and return the web scraper agent."""
+        from crewai.llm import LLM
+
+        if not config.GOOGLE_API_KEY:
+            raise ValueError("GOOGLE_API_KEY is not set. Please check your .env file.")
+
+        gemini_llm = LLM(
+            model="gemini/gemini-2.5-flash",
+            api_key=config.GOOGLE_API_KEY,
+            temperature=config.TEMPERATURE,
+        )
+
         return Agent(
             role="Web Research Specialist",
             goal="Find real-world internship opportunities from online sources",
@@ -24,7 +35,7 @@ class WebScraperAgent:
             ),
             verbose=True,
             allow_delegation=False,
-            llm='gemini/gemini-1.5',
+            llm=gemini_llm,
         )
     
     def get_task(self):

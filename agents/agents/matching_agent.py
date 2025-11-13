@@ -13,6 +13,17 @@ class MatchingAgent:
     
     def get_agent(self):
         """Create and return the matching agent."""
+        from crewai.llm import LLM
+
+        if not config.GOOGLE_API_KEY:
+            raise ValueError("GOOGLE_API_KEY is not set. Please check your .env file.")
+
+        gemini_llm = LLM(
+            model="gemini/gemini-2.5-flash",
+            api_key=config.GOOGLE_API_KEY,
+            temperature=config.TEMPERATURE,
+        )
+
         return Agent(
             role="Internship Matching Specialist",
             goal="Match student profiles to suitable internships",
@@ -26,7 +37,7 @@ class MatchingAgent:
             ),
             verbose=True,
             allow_delegation=True,  # Allow delegation to web scraper agent
-            llm='gemini/gemini-1.5',
+            llm=gemini_llm,
         )
     
     def get_task(self):

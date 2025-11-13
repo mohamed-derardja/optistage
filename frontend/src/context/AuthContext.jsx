@@ -1,5 +1,5 @@
 import { createContext, useEffect, useState, useCallback } from "react";
-import { AuthService } from "../services/authService";
+import { AuthService } from "../services/AuthService";
 import api from "../services/api";
 
 export const AuthContext = createContext();
@@ -36,6 +36,19 @@ export const AuthProvider = ({ children }) => {
         fetchUser();
     }, [fetchUser]);
 
+    const signup = async (name, email, password) => {
+        setLoading(true);
+        setError(null);
+        setMessage(null);
+
+        const { user, error, message } = await AuthService.register(name, email, password);
+
+        setUser(user);
+        setError(error);
+        setMessage(message);
+        setLoading(false);
+    };
+
     const login = async (email, password) => {
         setLoading(true);
         setError(null);
@@ -67,6 +80,7 @@ export const AuthProvider = ({ children }) => {
         <AuthContext.Provider
             value={{
                 user,
+                signup,
                 login,
                 logout,
                 loading,
