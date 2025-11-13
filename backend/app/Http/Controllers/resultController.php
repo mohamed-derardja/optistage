@@ -40,7 +40,7 @@ class ResultController extends Controller
                     ['Content-Type' => 'application/pdf']
                 )
                 ->timeout(500)
-                ->post('https://oppmatchcode-2.onrender.com/process-pdf');
+                ->post('http://127.0.0.1:5000/process-pdf');
 
             // 4. Handle API response
             if ($response->status() === 400) {
