@@ -10,6 +10,12 @@ import re
 from main import main
 from crewai.crew import CrewOutput
 
+try:
+    from google.genai.errors import ClientError as GeminiClientError
+except ImportError:  # pragma: no cover - fallback when package missing
+    class GeminiClientError(Exception):
+        pass
+
 app = Flask(__name__)
 
 UPLOAD_FOLDER = tempfile.gettempdir()
@@ -72,6 +78,29 @@ def process_pdf():
                 # If it's already a dict or other JSON-serializable object
                 return jsonify({"success": True, "result": result})
                 
+        except GeminiClientError as e:
+            error_payload = getattr(e, "response_json", {})
+            error_body = (error_payload or {}).get("error", {})
+            message = error_body.get("message") or "Gemini quota exceeded. Please try again shortly."
+            retry_after = None
+
+            for detail in error_body.get("details", []):
+                if detail.get("@type") == "type.googleapis.com/google.rpc.RetryInfo":
+                    retry_after = detail.get("retryDelay")
+                    break
+
+            response_body = {
+                "success": False,
+                "message": message,
+                "code": "LLM_QUOTA_EXCEEDED",
+                "provider": "google-gemini",
+                "retry_after": retry_after,
+                "details": error_body or str(e),
+            }
+
+            print(f"Gemini quota error: {message}")
+            return jsonify(response_body), 429
+
         except Exception as e:
             import traceback
             error_details = traceback.format_exc()

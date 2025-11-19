@@ -1,11 +1,16 @@
 import api from "./api";
 
 export const FileService = {
-  async uploadFile(formData) {
+  async uploadFile(formData, onUploadProgress) {
     try {
       const response = await api.post("getDataFromAgent", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
+        },
+        onUploadProgress: (event) => {
+          if (typeof onUploadProgress === "function") {
+            onUploadProgress(event);
+          }
         },
       });
 
@@ -13,7 +18,7 @@ export const FileService = {
       return { data: response.data, error: null };
     } catch (e) {
       console.error("Upload failed:", e);
-      return { data: null, error: e };
+      throw e;
     }
   },
 };

@@ -42,7 +42,19 @@ class ResultController extends Controller
                 ->timeout(500)
                 ->post('http://127.0.0.1:5000/process-pdf');
 
+            $responseData = $response->json();
+
             // 4. Handle API response
+            if ($response->status() === 429 && isset($responseData['code']) && $responseData['code'] === 'LLM_QUOTA_EXCEEDED') {
+                Log::warning('PDF Processing throttled: LLM quota exceeded.');
+                return response()->json([
+                    'success' => false,
+                    'message' => $responseData['message'] ?? 'AI quota exceeded. Please try again shortly.',
+                    'code' => 'LLM_QUOTA_EXCEEDED',
+                    'retry_after' => $responseData['retry_after'] ?? null,
+                ], 429);
+            }
+
             if ($response->status() === 400) {
                 throw new \Exception("API rejected the file: " . $response->body());
             }
@@ -50,8 +62,6 @@ class ResultController extends Controller
             if (!$response->successful()) {
                 throw new \Exception("API request failed with status: " . $response->status());
             }
-
-            $responseData = $response->json();
             
             // 5. Store results in database (only if API was successful)
             if ($responseData['success'] && isset($responseData['internships'])) {

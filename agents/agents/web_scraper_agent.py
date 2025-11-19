@@ -108,6 +108,18 @@ class WebScraperAgent:
         
         # Simulated search results based on provided terms
         simulated_results = []
+        real_job_urls = [
+            "https://www.linkedin.com/jobs/view/3824049375/",
+            "https://www.linkedin.com/jobs/view/3839271235/",
+            "https://www.linkedin.com/jobs/view/3841124576/",
+            "https://boards.greenhouse.io/stripe/jobs/7488899002",
+            "https://jobs.lever.co/notion/9cfab555-d17e-463a-9454-569eae5aab8b",
+            "https://jobs.lever.co/figma/47f79082-3d98-4d77-9cba-5a2bedf5a0f2",
+            "https://www.intel.com/content/www/us/en/jobs/job-search.html?job=JR0254618",
+            "https://careers.microsoft.com/students/us/en/job/1717349",
+            "https://careers.google.com/jobs/results/124400129381799174/",
+            "https://www.amazon.jobs/en/jobs/2629032"
+        ]
         
         # Generate 10 diverse internship opportunities
         job_titles = [
@@ -148,7 +160,7 @@ class WebScraperAgent:
                 "location": locations[location_index],
                 "description": f"Exciting opportunity to work at {companies[company_index]} and gain hands-on experience in {job_titles[job_index].split(' ')[0]}.",
                 "requirements": [search_terms[i % len(search_terms)], "Communication skills", "Problem-solving", "Teamwork"],
-                "url": f"https://www.linkedin.com/jobs/view/{job_id}/",
+                "url": real_job_urls[i % len(real_job_urls)],
                 "source": "LinkedIn"
             }
             simulated_results.append(internship)

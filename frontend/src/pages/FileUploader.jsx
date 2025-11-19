@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { UploadCloud, Loader2, X, ArrowLeft, Clock } from "lucide-react";
 import { FileService } from "../services/FileService";
 import { Link } from "react-router-dom"; // or your routing solution
@@ -8,6 +8,54 @@ export default function PdfUploadSection() {
   const [uploading, setUploading] = useState(false);
   const [internships, setInternships] = useState([]);
   const [error, setError] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [progressTarget, setProgressTarget] = useState(0);
+  const [showProgress, setShowProgress] = useState(false);
+  const progressIntervalRef = useRef(null);
+
+  useEffect(() => {
+    if (!showProgress) {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+      }
+      setUploadProgress(0);
+      return;
+    }
+
+    if (progressTarget <= uploadProgress) {
+      return;
+    }
+
+    if (progressIntervalRef.current) {
+      clearInterval(progressIntervalRef.current);
+    }
+
+    progressIntervalRef.current = setInterval(() => {
+      setUploadProgress((prev) => {
+        if (prev >= progressTarget) {
+          clearInterval(progressIntervalRef.current);
+          progressIntervalRef.current = null;
+          return prev;
+        }
+
+        const diff = progressTarget - prev;
+        const step =
+          diff > 30 ? 7 :
+          diff > 15 ? 4 :
+          diff > 5 ? 2 : 1;
+
+        const next = Math.min(prev + step, progressTarget);
+        return next;
+      });
+    }, 80);
+
+    return () => {
+      if (progressIntervalRef.current) {
+        clearInterval(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+    };
+  }, [progressTarget, showProgress, uploadProgress]);
 
   const handleFileChange = async (e) => {
     const selectedFile = e.target.files[0];
@@ -17,24 +65,51 @@ export default function PdfUploadSection() {
     setUploading(true);
     setError(null);
     setInternships([]);
+    setUploadProgress(0);
+    setProgressTarget(0);
+    setShowProgress(true);
 
     const formData = new FormData();
     formData.append("file", selectedFile);
 
     try {
-      const res = await FileService.uploadFile(formData);
+      const res = await FileService.uploadFile(formData, (event) => {
+        if (!event) return;
+        let percentage = 0;
+
+        if (typeof event.progress === "number" && !Number.isNaN(event.progress)) {
+          percentage = Math.round(event.progress * 100);
+        } else {
+          const total = event.total ?? selectedFile.size ?? event.loaded ?? 0;
+          if (total > 0) {
+            percentage = Math.round((event.loaded / total) * 100);
+          }
+        }
+
+        setProgressTarget((prev) => {
+          const bounded = Math.min(99, Math.max(0, percentage));
+          return bounded > prev ? bounded : prev;
+        });
+      });
 
       if (res.data?.data?.internships) {
         setInternships(res.data.data.internships);
       } else {
         setError("Failed to retrieve internship data.");
       }
+      setProgressTarget(100);
     } catch (err) {
       console.error("Upload failed:", err);
-      setError("Something went wrong while uploading.");
+      const serverMessage = err?.response?.data?.message;
+      setError(serverMessage || "Something went wrong while uploading.");
+    } finally {
+      setUploading(false);
+      setTimeout(() => {
+        setShowProgress(false);
+        setUploadProgress(0);
+        setProgressTarget(0);
+      }, 800);
     }
-
-    setUploading(false);
   };
 
   return (
@@ -75,7 +150,7 @@ export default function PdfUploadSection() {
         Upload your PDF document here. We will process and extract key information from it to help you in your journey.
       </p>
 
-      <div className="relative">
+      <div className="relative flex flex-col items-center">
         <div
           className={`w-[250px] h-[150px] rounded-2xl border border-[rgba(187,155,255,0.2)] 
           bg-[rgba(187,155,255,0.05)] text-[#BB9BFF] backdrop-blur-[40px] 
@@ -96,6 +171,21 @@ export default function PdfUploadSection() {
             disabled={uploading}
           />
         </div>
+
+        {showProgress && (
+          <div className="w-full max-w-sm mt-6">
+            <div className="flex justify-between text-xs text-white/70 mb-2">
+              <span>Uploading...</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary-400 transition-all duration-200"
+                style={{ width: `${uploadProgress}%` }}
+              ></div>
+            </div>
+          </div>
+        )}
 
         {uploading && (
           <div className="absolute inset-0 flex items-center justify-center">
