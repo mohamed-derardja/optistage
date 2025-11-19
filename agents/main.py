@@ -84,7 +84,7 @@ FALLBACK_OPPORTUNITIES: List[Dict[str, Any]] = [
     },
 ]
 
-
+# ---------- Helper functions ----------
 def _is_transient_llm_error(error: Exception) -> bool:
     message = str(error).lower()
     return any(hint in message for hint in TRANSIENT_ERROR_HINTS)
@@ -177,98 +177,85 @@ def _content_is_empty(extracted_text: str | None) -> bool:
     )
 
 
+# ---------- Main function ----------
 def main(pdf_path_or_content=None):
-    """
-    Main function to process PDF and run the CrewAI system.
-    
-    Args:
-        pdf_path_or_content: Either a path to a PDF file or the extracted PDF content
-    
-    Returns:
-        The result from the crew execution - top 3 internship matches
-    """
     if pdf_path_or_content is None:
         pdf_path_or_content = sys.argv[1] if len(sys.argv) > 1 else None
-    
+
     if not pdf_path_or_content:
         print("Please provide a PDF/TXT file path or extracted text content as an argument.")
         return
-    
+
     is_file_path = isinstance(pdf_path_or_content, str) and (
-        pdf_path_or_content.lower().endswith('.pdf') and 
-        os.path.exists(pdf_path_or_content)
+        pdf_path_or_content.lower().endswith('.pdf') and os.path.exists(pdf_path_or_content)
     )
-    
+
+    # ---------- File size & page limit ----------
     if is_file_path:
+        if os.path.getsize(pdf_path_or_content) > 5 * 1024 * 1024:  # 5MB
+            return {"success": False, "error": "PDF_TOO_LARGE", "message": "PDF too large. Split it into smaller files."}
         pdf_parser = PDFParser()
+        num_pages = pdf_parser.get_number_of_pages(pdf_path_or_content)
+        if num_pages > 20:
+            return {"success": False, "error": "PDF_TOO_LONG", "message": "PDF too many pages (>20). Split into smaller PDFs."}
         pdf_content = pdf_parser.parse_pdf(pdf_path_or_content)
-        print(f"Successfully parsed PDF: {pdf_path_or_content}")
+        print(f"Parsed PDF: {pdf_path_or_content}")
     else:
         pdf_content = pdf_path_or_content
-    
+
     if _content_is_empty(pdf_content):
-        message = (
-            "We couldn't read any text from this file. "
-            "Please upload a text-based resume (not a scanned image) or use OCR first."
-        )
+        message = "We couldn't read any text from this file. Upload a text-based resume or use OCR first."
+        return {"success": False, "error": "FILE_TEXT_EMPTY", "message": message}
+
+    # ---------- Chunk content ----------
+    pdf_processor = PDFContentProcessor()
+    chunk_size = 1000  # characters
+    chunks = [pdf_content[i:i + chunk_size] for i in range(0, len(pdf_content), chunk_size)]
+    processed_chunks = [pdf_processor.process_content(chunk) for chunk in chunks]
+    processed_content = " ".join(processed_chunks)
+
+    # ---------- Run agents sequentially ----------
+    try:
+        # Document Analysis
+        doc_agent = DocumentAnalysisAgent(pdf_content=processed_content)
+        doc_crew = Crew(agents=[doc_agent.get_agent()], tasks=[doc_agent.get_task()], verbose=True)
+        result_doc = _kickoff_with_retries(doc_crew)
+
+        # Summary Agent
+        sum_agent = SummaryAgent()
+        sum_crew = Crew(agents=[sum_agent.get_agent()], tasks=[sum_agent.get_task()], verbose=True)
+        result_sum = _kickoff_with_retries(sum_crew)
+
+        # Matching Agent
+        match_agent = MatchingAgent()
+        match_crew = Crew(agents=[match_agent.get_agent()], tasks=[match_agent.get_task()], verbose=True)
+        result_match = _kickoff_with_retries(match_crew)
+
+        # Optional: Web Scraper Agent
+        # web_agent = WebScraperAgent()
+        # web_crew = Crew(agents=[web_agent.get_agent()], tasks=[web_agent.get_task()], verbose=True)
+        # result_web = _kickoff_with_retries(web_crew)
+
+        final_result = str(result_match)
+        parsed = parse_internship_results(final_result)
+
+        internships = parsed.get("internships", [])
+        if not internships:
+            return _build_fallback_payload(processed_content, "Crew returned empty result")
+
         return {
-            "success": False,
-            "error": "FILE_TEXT_EMPTY",
-            "message": message,
+            "success": True,
+            "internships": internships,
+            "raw_output": final_result,
+            "fallback_used": False,
+            "source": "llm",
         }
 
-    pdf_processor = PDFContentProcessor()
-    
-    # Process the PDF content
-    processed_content = pdf_processor.process_content(pdf_content)
-    
-    # Create agents
-    doc_analysis_agent = DocumentAnalysisAgent(pdf_content=processed_content)
-    summary_agent = SummaryAgent()
-    web_scraper_agent = WebScraperAgent()
-    matching_agent = MatchingAgent()
-    
-    # Create crew
-    document_crew = Crew(
-        agents=[
-            doc_analysis_agent.get_agent(), 
-            summary_agent.get_agent(),
-            web_scraper_agent.get_agent(),
-            matching_agent.get_agent()
-        ],
-        tasks=[
-            doc_analysis_agent.get_task(),
-            summary_agent.get_task(),
-            web_scraper_agent.get_task(),
-            matching_agent.get_task()
-        ],
-        verbose=True
-    )
-    
-    try:
-        result = _kickoff_with_retries(document_crew)
     except Exception as exc:
         if _is_transient_llm_error(exc):
             return _build_fallback_payload(processed_content, str(exc))
         raise
 
-    result_str = str(result)
-    parsed = parse_internship_results(result_str)
-
-    print("\n\n=== Top 3 Internship Matches ===")
-    print(result_str)
-
-    internships = parsed.get("internships", [])
-    if not internships:
-        return _build_fallback_payload(processed_content, "Crew returned empty result")
-
-    return {
-        "success": True,
-        "internships": internships,
-        "raw_output": result_str,
-        "fallback_used": False,
-        "source": "llm",
-    }
 
 if __name__ == "__main__":
     main()

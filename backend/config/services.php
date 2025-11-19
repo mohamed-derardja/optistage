@@ -36,7 +36,7 @@ return [
     ],
 
     'agents' => [
-        'base_url' => env('AGENT_SERVICE_URL', 'http://127.0.0.1:5000'),
+        'base_url' => env('AGENT_SERVICE_URL', 'http://host.docker.internal:5000'),
         'endpoint' => env('AGENT_PROCESS_ENDPOINT', '/process-pdf'),
         'timeout' => env('AGENT_SERVICE_TIMEOUT', 120),
     ],

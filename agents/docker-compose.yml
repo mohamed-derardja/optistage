@@ -11,3 +11,7 @@ services:
     restart: unless-stopped
     volumes:
       - .:/app
+    deploy:
+      resources:
+        limits:
+          memory: 1g

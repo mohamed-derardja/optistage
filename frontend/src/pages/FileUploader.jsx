@@ -144,7 +144,7 @@ export default function PdfUploadSection() {
   };
 
   return (
-    <section className="w-full flex flex-col items-center justify-center py-40 px-4 bg-gradient-to-r from-background-light via-background to-background-darker">
+    <section className="w-full flex flex-col items-center justify-center py-40 px-4 bg-gradient-to-r from-background-light via-background to-background-darker h-full min-h-screen">
       {/* Navigation Links */}
       <div className="absolute top-6 left-6">
         <Link

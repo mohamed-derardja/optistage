@@ -1,10 +1,7 @@
-"""
-Agent responsible for scraping websites like LinkedIn for internship opportunities.
-"""
 from crewai import Agent, Task
 import config
 import json
-import re
+import requests
 from urllib.parse import quote
 
 class WebScraperAgent:
@@ -31,7 +28,8 @@ class WebScraperAgent:
                 "You are an expert web researcher specialized in finding educational and "
                 "career opportunities. With extensive experience in navigating employment "
                 "platforms, you excel at discovering relevant internship "
-                "opportunities that match specific candidate profiles."
+                "opportunities that match specific candidate profiles. "
+                "Use only working links and reject any 404 or invalid URLs."
             ),
             verbose=True,
             allow_delegation=False,
@@ -49,7 +47,7 @@ class WebScraperAgent:
             expected_output=(
                 "A JSON structure containing: "
                 "A list of 8-10 internship opportunities with title, company, location, and requirements. "
-                "Each entry should include a source URL."
+                "Each entry should include a verified source URL."
             ),
             agent=self.get_agent()
         )
@@ -62,7 +60,7 @@ class WebScraperAgent:
             profile_data: JSON structure containing candidate information
             
         Returns:
-            List of internship opportunities found on LinkedIn
+            List of verified internship opportunities
         """
         try:
             # Parse profile data if it's a string
@@ -84,30 +82,46 @@ class WebScraperAgent:
             
             # Combine skills and majors for search terms
             search_terms = skills + majors
+            search_terms = [term for term in search_terms if term]  # remove empty terms
+            
+            if not search_terms:
+                return [{"error": "No skills or education information provided for search."}]
             
             # Simulate LinkedIn search results
-            # In a real implementation, this would use web scraping or LinkedIn API
-            print(f"Searching for internships matching: {', '.join(search_terms[:3])}")
-            
-            # Simulate an API call or web scraping
             results = self._simulate_linkedin_search(search_terms[:3])
             
-            return results
+            # Filter by relevance to search terms
+            filtered_results = [
+                job for job in results
+                if any(term.lower() in job["title"].lower() or term.lower() in job["description"].lower()
+                       for term in search_terms)
+            ]
+            
+            # Verify URLs
+            verified_results = [job for job in filtered_results if self._verify_url(job["url"])]
+            
+            if not verified_results:
+                return [{"error": "No valid internship opportunities found matching the profile."}]
+            
+            return verified_results
             
         except Exception as e:
             return [{"error": f"LinkedIn search failed: {str(e)}"}]
+    
+    def _verify_url(self, url):
+        """Check if a URL is valid (returns HTTP 200)."""
+        try:
+            response = requests.head(url, allow_redirects=True, timeout=5)
+            return response.status_code == 200
+        except:
+            return False
     
     def _simulate_linkedin_search(self, search_terms):
         """
         Simulate LinkedIn search results for demonstration purposes.
         In a real implementation, this would use web scraping or LinkedIn API.
         """
-        # Construct a query string from search terms
-        query = "+".join([quote(term) for term in search_terms])
-        base_url = "https://www.linkedin.com/jobs/search/?keywords="
-        
-        # Simulated search results based on provided terms
-        simulated_results = []
+        # Predefined URLs (some popular internship pages)
         real_job_urls = [
             "https://www.linkedin.com/jobs/view/3824049375/",
             "https://www.linkedin.com/jobs/view/3839271235/",
@@ -121,7 +135,6 @@ class WebScraperAgent:
             "https://www.amazon.jobs/en/jobs/2629032"
         ]
         
-        # Generate 10 diverse internship opportunities
         job_titles = [
             "Software Engineering Intern", 
             "Data Science Intern", 
@@ -145,14 +158,11 @@ class WebScraperAgent:
             "Seattle, WA", "Boston, MA", "Chicago, IL", "Los Angeles, CA"
         ]
         
+        simulated_results = []
         for i in range(10):
             job_index = i % len(job_titles)
             company_index = i % len(companies)
             location_index = i % len(locations)
-            
-            # Create more realistic URLs
-            job_id = 1000 + i
-            company_slug = companies[company_index].lower().replace(" ", "-")
             
             internship = {
                 "title": job_titles[job_index],

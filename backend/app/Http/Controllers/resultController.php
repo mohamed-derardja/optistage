@@ -32,7 +32,7 @@ class ResultController extends Controller
             $uploadedFile = $request->file('file');
             
             $agentConfig = config('services.agents', []);
-            $agentBaseUrl = rtrim($agentConfig['base_url'] ?? 'http://127.0.0.1:5000', '/');
+            $agentBaseUrl = rtrim($agentConfig['base_url'] ?? 'http://host.docker.internal:5000', '/');
             $agentEndpoint = ltrim($agentConfig['endpoint'] ?? '/process-pdf', '/');
             $agentTimeout = (int) ($agentConfig['timeout'] ?? 120);
             $agentUrl = $agentBaseUrl . '/' . $agentEndpoint;
@@ -56,7 +56,7 @@ class ResultController extends Controller
 
             // 4. Handle API response
             if ($response->status() === 429 && isset($responseData['code']) && $responseData['code'] === 'LLM_QUOTA_EXCEEDED') {
-                Log::warning('PDF Processing throttled: LLM quota exceeded.');
+                Log::warning('PDF Processing throttled::5000 LLM quota exceeded.');
                 return response()->json([
                     'success' => false,
                     'message' => $responseData['message'] ?? 'AI quota exceeded. Please try again shortly.',
