@@ -4,7 +4,6 @@ databases:
     databaseName: oppmatch
     user: oppmatch
     engine: mysql
-    ipAllowList: []
 
 services:
   - type: web
@@ -18,7 +17,8 @@ services:
       php artisan route:cache
       php artisan view:cache
     startCommand: ./vendor/bin/heroku-php-apache2 public/
-    postDeployCommand: php artisan migrate --force --seed
+    postDeployCommand: |
+      php artisan migrate --force --seed
     envVars:
       - key: APP_ENV
         value: production
@@ -79,7 +79,7 @@ services:
     rootDir: agents
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn app:app -b 0.0.0.0:$PORT
+    startCommand: gunicorn app:app
     envVars:
       - key: PYTHONUNBUFFERED
         value: "1"
