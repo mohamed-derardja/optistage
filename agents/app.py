@@ -19,7 +19,7 @@ except ImportError:  # pragma: no cover - fallback when package missing
 app = Flask(__name__)
 
 UPLOAD_FOLDER = tempfile.gettempdir()
-ALLOWED_EXTENSIONS = {'pdf'}
+ALLOWED_EXTENSIONS = {'pdf', 'txt'}
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload size
@@ -36,9 +36,9 @@ def health_check():
 @app.route('/process-pdf', methods=['POST'])
 def process_pdf():
     """
-    Endpoint to process uploaded PDF files.
+    Endpoint to process uploaded PDF or TXT files.
     
-    Expected format: multipart/form-data with a 'file' field containing the PDF
+    Expected format: multipart/form-data with a 'file' field containing the PDF or TXT file
     """
     # Check if the post request has the file part
     if 'file' not in request.files:
@@ -58,8 +58,18 @@ def process_pdf():
         file.save(temp_path)
         
         try:
-            # Process the PDF using the CrewAI pipeline
-            result = main(temp_path)
+            # Check if it's a TXT file - read content directly
+            file_extension = filename.rsplit('.', 1)[1].lower() if '.' in filename else ''
+            
+            if file_extension == 'txt':
+                # Read TXT file content directly
+                with open(temp_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    text_content = f.read()
+                # Process the text content using the CrewAI pipeline
+                result = main(text_content)
+            else:
+                # Process PDF file using the CrewAI pipeline
+                result = main(temp_path)
 
             # Handle CrewOutput object - convert to string
             if hasattr(result, '__class__') and result.__class__.__name__ == 'CrewOutput':
@@ -114,7 +124,7 @@ def process_pdf():
             if os.path.exists(temp_path):
                 os.remove(temp_path)
     
-    return jsonify({"error": "Invalid file type. Only PDF files are allowed."}), 400
+    return jsonify({"error": "Invalid file type. Only PDF and TXT files are allowed."}), 400
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

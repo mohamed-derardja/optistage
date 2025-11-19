@@ -92,10 +92,41 @@ export default function PdfUploadSection() {
         });
       });
 
-      if (res.data?.data?.internships) {
-        setInternships(res.data.data.internships);
+      // Log the full response for debugging
+      console.log("Full response:", res);
+      console.log("Response data:", res.data);
+      
+      // Check if the request was successful
+      if (res.data?.success === false || res.data?.data?.success === false) {
+        const errorMsg = res.data?.data?.message || 
+                         res.data?.message || 
+                         res.data?.error ||
+                         "Processing failed. Please try again.";
+        setError(errorMsg);
+        console.error("Request failed:", res.data);
+        return;
+      }
+      
+      // Check multiple possible response structures
+      const internships = 
+        res.data?.data?.internships ||  // Backend wraps agent response: { success: true, data: { internships: [...] } }
+        res.data?.internships ||         // Direct agent response: { internships: [...] }
+        res.data?.data?.data?.internships; // Extra nested structure
+      
+      if (internships && Array.isArray(internships) && internships.length > 0) {
+        setInternships(internships);
+        // Log if fallback was used
+        if (res.data?.data?.fallback_used) {
+          console.warn("Fallback internships were used:", res.data.data.fallback_reason);
+        }
       } else {
-        setError("Failed to retrieve internship data.");
+        // More detailed error message
+        const errorMsg = res.data?.data?.message || 
+                         res.data?.message || 
+                         res.data?.error ||
+                         "Failed to retrieve internship data. The PDF might be empty or unreadable.";
+        setError(errorMsg);
+        console.error("No internships found in response:", res.data);
       }
       setProgressTarget(100);
     } catch (err) {
@@ -144,10 +175,10 @@ export default function PdfUploadSection() {
       </div>
 
 
-      <h2 className="text-5xl font-bold text-primary-400 mb-4">Upload Your PDF</h2>
+      <h2 className="text-5xl font-bold text-primary-400 mb-4">Upload Your Resume</h2>
 
       <p className="text-md text-primary-400 mb-10 text-center max-w-md">
-        Upload your PDF document here. We will process and extract key information from it to help you in your journey.
+        Upload your PDF or TXT resume here. We will process and extract key information from it to help you in your journey.
       </p>
 
       <div className="relative flex flex-col items-center">
@@ -160,12 +191,12 @@ export default function PdfUploadSection() {
           ${uploading ? "opacity-50 pointer-events-none" : ""}`}
         >
           <UploadCloud size={50} />
-          <div className="text-lg font-bold mt-2 mb-1">Upload PDF</div>
-          <div className="text-xs text-center">Click or drag file here</div>
+          <div className="text-lg font-bold mt-2 mb-1">Upload Resume</div>
+          <div className="text-xs text-center">PDF or TXT file</div>
 
           <input
             type="file"
-            accept="application/pdf"
+            accept="application/pdf,.txt,text/plain"
             className="opacity-0 absolute w-full h-full cursor-pointer"
             onChange={handleFileChange}
             disabled={uploading}

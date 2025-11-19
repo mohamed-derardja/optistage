@@ -14,10 +14,17 @@ export const FileService = {
         },
       });
 
-      // Assuming response data contains the full JSON, including internships
+      // Return the full response data
       return { data: response.data, error: null };
     } catch (e) {
       console.error("Upload failed:", e);
+      // Return error details if available
+      if (e.response) {
+        return { 
+          data: e.response.data || null, 
+          error: e.response.data?.message || e.message || "Upload failed" 
+        };
+      }
       throw e;
     }
   },

@@ -191,7 +191,7 @@ def main(pdf_path_or_content=None):
         pdf_path_or_content = sys.argv[1] if len(sys.argv) > 1 else None
     
     if not pdf_path_or_content:
-        print("Please provide a PDF file path or extracted PDF content as an argument.")
+        print("Please provide a PDF/TXT file path or extracted text content as an argument.")
         return
     
     is_file_path = isinstance(pdf_path_or_content, str) and (
@@ -208,12 +208,12 @@ def main(pdf_path_or_content=None):
     
     if _content_is_empty(pdf_content):
         message = (
-            "We couldn't read any text from this PDF. "
+            "We couldn't read any text from this file. "
             "Please upload a text-based resume (not a scanned image) or use OCR first."
         )
         return {
             "success": False,
-            "error": "PDF_TEXT_EMPTY",
+            "error": "FILE_TEXT_EMPTY",
             "message": message,
         }
 

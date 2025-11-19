@@ -15,9 +15,9 @@ class ResultController extends Controller
     public function processPdf(Request $request)
     {
         try {
-            // 1. Validate the PDF file
+            // 1. Validate the file (PDF or TXT)
             $request->validate([
-                'file' => 'required|file|mimes:pdf|max:5120', // 5MB max
+                'file' => 'required|file|mimes:pdf,txt|max:5120', // 5MB max
             ]);
         } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
@@ -28,19 +28,29 @@ class ResultController extends Controller
         }
 
         try {
-            // 2. Get the PDF file
-            $pdfFile = $request->file('file');
+            // 2. Get the file
+            $uploadedFile = $request->file('file');
             
-            // 3. Make the API request
+            $agentConfig = config('services.agents', []);
+            $agentBaseUrl = rtrim($agentConfig['base_url'] ?? 'http://127.0.0.1:5000', '/');
+            $agentEndpoint = ltrim($agentConfig['endpoint'] ?? '/process-pdf', '/');
+            $agentTimeout = (int) ($agentConfig['timeout'] ?? 120);
+            $agentUrl = $agentBaseUrl . '/' . $agentEndpoint;
+
+            // 3. Determine file type and content type
+            $fileExtension = strtolower($uploadedFile->getClientOriginalExtension());
+            $contentType = $fileExtension === 'txt' ? 'text/plain' : 'application/pdf';
+            
+            // 4. Make the API request
             $response = Http::asMultipart()
                 ->attach(
                     'file', 
-                    file_get_contents($pdfFile->getRealPath()),
-                    $pdfFile->getClientOriginalName(),
-                    ['Content-Type' => 'application/pdf']
+                    file_get_contents($uploadedFile->getRealPath()),
+                    $uploadedFile->getClientOriginalName(),
+                    ['Content-Type' => $contentType]
                 )
-                ->timeout(500)
-                ->post('http://127.0.0.1:5000/process-pdf');
+                ->timeout($agentTimeout)
+                ->post($agentUrl);
 
             $responseData = $response->json();
 
