@@ -92,13 +92,4 @@ services:
       - key: LAMA_API_KEY
         sync: false
 
-  - type: static_site
-    name: oppmatch-frontend
-    rootDir: frontend
-    plan: free
-    buildCommand: npm install --force && npm run build
-    staticPublishPath: dist
-    envVars:
-      - key: VITE_API_URL
-        value: https://replace-with-backend-url.onrender.com/api
 
