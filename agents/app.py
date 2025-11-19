@@ -6,9 +6,9 @@ from werkzeug.utils import secure_filename
 import os
 import tempfile
 import json
-import re
 from main import main
 from crewai.crew import CrewOutput
+from utils.result_parser import parse_internship_results
 
 try:
     from google.genai.errors import ClientError as GeminiClientError
@@ -60,23 +60,22 @@ def process_pdf():
         try:
             # Process the PDF using the CrewAI pipeline
             result = main(temp_path)
-            
+
             # Handle CrewOutput object - convert to string
             if hasattr(result, '__class__') and result.__class__.__name__ == 'CrewOutput':
                 result = str(result)
-            
-            # Parse the internship data into a structured format
+
+            if isinstance(result, dict):
+                return jsonify(result)
+
             if isinstance(result, str):
                 try:
-                    # Try to parse the result as structured internships
                     internships = parse_internship_results(result)
                     return jsonify(internships)
-                except Exception as e:
-                    # If parsing fails, return the raw result
+                except Exception:
                     return jsonify({"success": True, "result": result})
-            else:
-                # If it's already a dict or other JSON-serializable object
-                return jsonify({"success": True, "result": result})
+
+            return jsonify({"success": True, "result": result})
                 
         except GeminiClientError as e:
             error_payload = getattr(e, "response_json", {})
@@ -116,36 +115,6 @@ def process_pdf():
                 os.remove(temp_path)
     
     return jsonify({"error": "Invalid file type. Only PDF files are allowed."}), 400
-
-def parse_internship_results(result_str):
-    """
-    Parse the internship results from the text format to structured JSON.
-    
-    Args:
-        result_str: String containing internship data in format:
-                   "1- Company\nPosition\nlink: URL\n\n2- Company..."
-    
-    Returns:
-        A dictionary with properly structured internship data
-    """
-    # Extract internship entries using regex
-    pattern = r'(\d+)-\s+([^\n]+)\n([^\n]+)\nlink:\s+([^\n]+)'
-    matches = re.findall(pattern, result_str)
-    
-    internships = []
-    for match in matches:
-        internship_number, company, position, url = match
-        internships.append({
-            "id": int(internship_number),
-            "company": company.strip(),
-            "position": position.strip(),
-            "url": url.strip()
-        })
-    
-    return {
-        "success": True,
-        "internships": internships
-    }
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

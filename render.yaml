@@ -1,0 +1,104 @@
+databases:
+  - name: oppmatch-db
+    plan: free
+    databaseName: oppmatch
+    user: oppmatch
+    engine: mysql
+    ipAllowList: []
+
+services:
+  - type: web
+    name: oppmatch-backend
+    env: php
+    rootDir: backend
+    plan: free
+    buildCommand: |
+      composer install --optimize-autoloader --no-dev
+      php artisan config:cache
+      php artisan route:cache
+      php artisan view:cache
+    startCommand: ./vendor/bin/heroku-php-apache2 public/
+    postDeployCommand: php artisan migrate --force --seed
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_URL
+        value: https://replace-with-backend-url.onrender.com
+      - key: FRONTEND_URL
+        value: https://replace-with-frontend-url.onrender.com
+      - key: SANCTUM_STATEFUL_DOMAINS
+        value: replace-with-frontend-url.onrender.com
+      - key: SESSION_DRIVER
+        value: database
+      - key: SESSION_LIFETIME
+        value: "120"
+      - key: QUEUE_CONNECTION
+        value: sync
+      - key: FILESYSTEM_DISK
+        value: public
+      - key: LOG_CHANNEL
+        value: stack
+      - key: AGENT_SERVICE_URL
+        value: https://replace-with-agent-url.onrender.com
+      - key: AGENT_PROCESS_ENDPOINT
+        value: /process-pdf
+      - key: AGENT_SERVICE_TIMEOUT
+        value: "180"
+      - key: VITE_API_URL
+        value: https://replace-with-backend-url.onrender.com/api
+      - key: APP_KEY
+        sync: false
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        fromDatabase:
+          name: oppmatch-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: oppmatch-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: oppmatch-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: oppmatch-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: oppmatch-db
+          property: password
+
+  - type: web
+    name: oppmatch-agents
+    env: python
+    rootDir: agents
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: gunicorn app:app -b 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: FLASK_ENV
+        value: production
+      - key: GOOGLE_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: LAMA_API_KEY
+        sync: false
+
+  - type: static_site
+    name: oppmatch-frontend
+    rootDir: frontend
+    plan: free
+    buildCommand: npm install --force && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        value: https://replace-with-backend-url.onrender.com/api
+
